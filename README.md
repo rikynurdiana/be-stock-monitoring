@@ -17,6 +17,8 @@ Aplikasi backend real-time berbasis [NestJS](https://nestjs.com/) untuk menampil
 - **Manajemen Interval per Client**
   - Update data periodik hanya untuk symbol yang diminta client
   - Interval otomatis dihentikan saat client disconnect
+- **Integrasi Real Data Stock dari YFinance**
+  - Sudah bisa menggunakan Real Data dari YFinance karena menggunakan service yang dibuat oleh [https://github.com/rikynurdiana/py-stock-monitoring]
 
 ## Cara Menjalankan
 
