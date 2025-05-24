@@ -13,7 +13,7 @@ interface StockData {
     origin: '*',
   },
 })
-export class StockGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class StockDummyGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
@@ -27,6 +27,47 @@ export class StockGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private clientIntervals = new Map<string, NodeJS.Timeout>();
   private chartHistory: Record<string, { timestamp: number, price: number }[]> = {};
   private chartIntervals = new Map<string, NodeJS.Timeout>();
+
+  private sendStockData(client: Socket, symbols: string[]) {
+    const stocks = this.stocks.filter((s) => symbols.includes(s.symbol));
+    if (stocks.length > 0) {
+      client.emit('stockDataDummy', stocks);
+    } else {
+      client.emit('error', { message: `Stock symbol(s) not found: ${symbols.join(', ')}` });
+    }
+  }
+
+  private sendChartData(client: Socket, symbols: string[]) {
+    const chartData = symbols.map(symbol => ({
+      symbol,
+      chart: this.chartHistory[symbol] || [],
+    }));
+    client.emit('chartDataDummy', chartData);
+  }
+
+  private updateChartHistory(symbols: string[]) {
+    const now = Math.floor(Date.now() / 1000);
+    for (const symbol of symbols) {
+      const history = this.chartHistory[symbol];
+      if (history && history.length > 0) {
+        // Ambil harga terakhir
+        let lastPrice = history[history.length - 1].price;
+        // Simulasi harga baru
+        lastPrice = Math.max(100, lastPrice + Math.round((Math.random() - 0.5) * 20));
+        // Shift data lama, push data baru
+        history.shift();
+        history.push({ timestamp: now, price: lastPrice });
+        // Update harga di this.stocks agar sinkron dengan chart
+        const stock = this.stocks.find(s => s.symbol === symbol);
+        if (stock) {
+          const prevPrice = stock.price;
+          stock.price = lastPrice;
+          stock.change = stock.price - prevPrice;
+          stock.changePercent = parseFloat(((stock.change / prevPrice) * 100).toFixed(2));
+        }
+      }
+    }
+  }
 
   constructor() {
     // Inisialisasi chart history untuk semua symbol
@@ -45,7 +86,6 @@ export class StockGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   handleConnection(client: Socket) {
     console.log(`Client connected: ${client.id}`);
-    // Tidak perlu broadcast semua data setiap 5 detik
   }
 
   handleDisconnect(client: Socket) {
@@ -62,7 +102,7 @@ export class StockGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  @SubscribeMessage('getStock')
+  @SubscribeMessage('getStockDummy')
   handleGetStock(client: Socket, payload: any) {
     let symbols: string[] = [];
 
@@ -98,13 +138,13 @@ export class StockGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.clientIntervals.set(client.id, interval);
   }
 
-  @SubscribeMessage('getAllStocks')
+  @SubscribeMessage('getAllStocksDummy')
   handleGetAllStocks(client: Socket) {
     console.log('Client requested all stocks data');
-    client.emit('stockData', this.stocks);
+    client.emit('stockDataDummy', this.stocks);
   }
 
-  @SubscribeMessage('getChart')
+  @SubscribeMessage('getChartDummy')
   handleGetChart(client: Socket, payload: any) {
     let symbols: string[] = [];
 
@@ -141,44 +181,5 @@ export class StockGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.chartIntervals.set(client.id, interval);
   }
 
-  private sendStockData(client: Socket, symbols: string[]) {
-    const stocks = this.stocks.filter((s) => symbols.includes(s.symbol));
-    if (stocks.length > 0) {
-      client.emit('stockData', stocks);
-    } else {
-      client.emit('error', { message: `Stock symbol(s) not found: ${symbols.join(', ')}` });
-    }
-  }
-
-  private sendChartData(client: Socket, symbols: string[]) {
-    const chartData = symbols.map(symbol => ({
-      symbol,
-      chart: this.chartHistory[symbol] || [],
-    }));
-    client.emit('chartData', chartData);
-  }
-
-  private updateChartHistory(symbols: string[]) {
-    const now = Math.floor(Date.now() / 1000);
-    for (const symbol of symbols) {
-      const history = this.chartHistory[symbol];
-      if (history && history.length > 0) {
-        // Ambil harga terakhir
-        let lastPrice = history[history.length - 1].price;
-        // Simulasi harga baru
-        lastPrice = Math.max(100, lastPrice + Math.round((Math.random() - 0.5) * 20));
-        // Shift data lama, push data baru
-        history.shift();
-        history.push({ timestamp: now, price: lastPrice });
-        // Update harga di this.stocks agar sinkron dengan chart
-        const stock = this.stocks.find(s => s.symbol === symbol);
-        if (stock) {
-          const prevPrice = stock.price;
-          stock.price = lastPrice;
-          stock.change = stock.price - prevPrice;
-          stock.changePercent = parseFloat(((stock.change / prevPrice) * 100).toFixed(2));
-        }
-      }
-    }
-  }
+  
 } 
